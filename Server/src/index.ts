@@ -5,9 +5,6 @@ import path from "path";
 import { Socket } from "socket.io";
 const io = require("socket.io")(server);
 
-// TODO: Share types??
-// TODO: Use classes (ie: vector class, entity class (reusable smooth movement), etc)
-
 app.use(
     express.static(path.join(__dirname, "../../Client/build"))
 );
@@ -17,12 +14,12 @@ type Vector = {
     y: number
 }
 
-type PlayerList = { [id: string]: Player };
-
-type Player = {
-    pos: Vector
+type EntityData = {
+    pos: Vector,
     moveSpeed: number
 }
+
+type PlayerList = { [id: string]: EntityData };
 
 type PlayerMovementEvent = {
     id: string,
@@ -55,19 +52,23 @@ server.listen(port, () => {
 });
 
 function addPlayer(socket: Socket, pos: Vector) {
+    let playerMoveSpeed = 4;
+
     playerList[socket.id] = {
         pos,
-        moveSpeed: 4,
+        moveSpeed: playerMoveSpeed,
     };
 
-    socket.emit("initPlayer", {
-        id: socket.id,
+    socket.emit("init", {
         playerList: playerList
     });
 
     socket.broadcast.emit("addPlayer", {
         id: socket.id,
-        pos
+        entityData: {
+            pos,
+            moveSpeed: playerMoveSpeed
+        }
     });
 
     playerCount++;

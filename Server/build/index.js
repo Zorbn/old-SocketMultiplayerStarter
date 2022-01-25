@@ -8,10 +8,10 @@ const app = (0, express_1.default)();
 const server = require("http").createServer(app);
 const path_1 = __importDefault(require("path"));
 const io = require("socket.io")(server);
-// TODO: Share types
+// TODO: Share types??
 // TODO: Use classes (ie: vector class, entity class (reusable smooth movement), etc)
 app.use(express_1.default.static(path_1.default.join(__dirname, "../../Client/build")));
-let players = {};
+let playerList = {};
 let playerCount = 0;
 io.on("connection", (socket) => {
     console.log("A client connected");
@@ -23,7 +23,7 @@ io.on("connection", (socket) => {
     socket.on("playerMoved", (event) => {
         if (!event)
             return;
-        players[event.id].pos = event.pos;
+        playerList[event.id].pos = event.pos;
     });
 });
 const port = process.env.PORT || 3000;
@@ -31,22 +31,25 @@ server.listen(port, () => {
     console.log("Listening on: ", port);
 });
 function addPlayer(socket, pos) {
-    players[socket.id] = {
+    let playerMoveSpeed = 4;
+    playerList[socket.id] = {
         pos,
-        moveSpeed: 4,
+        moveSpeed: playerMoveSpeed,
     };
-    socket.emit("initPlayer", {
-        id: socket.id,
-        playerList: players
+    socket.emit("init", {
+        playerList: playerList
     });
     socket.broadcast.emit("addPlayer", {
         id: socket.id,
-        pos
+        entityData: {
+            pos,
+            moveSpeed: playerMoveSpeed
+        }
     });
     playerCount++;
 }
 function removePlayer(socket) {
-    delete players[socket.id];
+    delete playerList[socket.id];
     playerCount--;
     socket.broadcast.emit("removePlayer", {
         id: socket.id
@@ -55,7 +58,7 @@ function removePlayer(socket) {
 const TickRate = 30;
 const TickMs = 1000 / TickRate;
 function tick() {
-    for (let [id, player] of Object.entries(players)) {
+    for (let [id, player] of Object.entries(playerList)) {
         io.sockets.sockets.get(id).broadcast.emit("playerMoved", {
             id,
             pos: player.pos

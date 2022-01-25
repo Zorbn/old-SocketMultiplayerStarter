@@ -3772,147 +3772,241 @@ var __importStar = (this && this.__importStar) || function (mod) {
     __setModuleDefault(result, mod);
     return result;
 };
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.Entity = void 0;
+const Pixi = __importStar(require("pixi.js"));
+class Entity {
+    constructor(pos, moveSpeed, stage) {
+        this.pos = pos;
+        this.smoothPos = pos;
+        this.moveSpeed = moveSpeed;
+        this.sprite = Pixi.Sprite.from("./assets/player.png");
+        Entity.entityList.push(this);
+        stage.addChild(this.sprite);
+    }
+}
+exports.Entity = Entity;
+Entity.smoothSteps = 3;
+Entity.entityList = [];
+
+},{"pixi.js":83}],13:[function(require,module,exports){
+"use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    Object.defineProperty(o, k2, { enumerable: true, get: function() { return m[k]; } });
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+    __setModuleDefault(result, mod);
+    return result;
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.GameApp = void 0;
+const Pixi = __importStar(require("pixi.js"));
+const player_1 = require("./player");
+class GameApp extends Pixi.Application {
+    constructor(width, height, backgroundColor, socket) {
+        super({ width, height, backgroundColor });
+        this.initialized = false;
+        document.body.appendChild(this.view);
+        this.ticker.add((delta) => {
+            this.update(socket, delta);
+        });
+    }
+    update(socket, delta) {
+        if (!this.initialized)
+            return;
+        player_1.Player.updateLocalPlayer(socket, delta);
+        player_1.Player.updateAll(socket.id, delta);
+    }
+    ;
+    registerListeners(socket) {
+        window.addEventListener("resize", () => {
+            this.renderer.resize(window.innerWidth, window.innerHeight);
+        });
+        socket.on("init", (event) => {
+            if (!event)
+                return;
+            for (let [id, player] of Object.entries(event.playerList)) {
+                new player_1.Player(player.pos, player.moveSpeed, this.stage, id);
+            }
+            this.initialized = true;
+        });
+    }
+}
+exports.GameApp = GameApp;
+
+},{"./player":17,"pixi.js":83}],14:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.GameMath = void 0;
+class GameMath {
+    static lerp(from, to, steps, delta) {
+        return (from + (to - from) / (steps / delta));
+    }
+}
+exports.GameMath = GameMath;
+
+},{}],15:[function(require,module,exports){
+"use strict";
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const socket_io_client_1 = __importDefault(require("socket.io-client"));
-const pixi = __importStar(require("pixi.js"));
+const player_1 = require("./player");
+const input_1 = require("./input");
+const gameApp_1 = require("./gameApp");
 const socket = (0, socket_io_client_1.default)();
-let app = new pixi.Application({
-    width: window.innerWidth,
-    height: window.innerHeight,
-    backgroundColor: 0x00a1db
-});
-document.body.appendChild(app.view);
-let players = {};
-let smoothPlayerPositions = {};
-const smoothSteps = 3;
-let localId = "";
-let initialized = false;
-function addPlayer(event) {
-    if (!event)
-        return;
-    players[event.id] = {
-        pos: event.pos,
-        moveSpeed: event.moveSpeed,
-        sprite: pixi.Sprite.from("./assets/player.png")
-    };
-    smoothPlayerPositions[event.id] = event.pos;
-    app.stage.addChild(players[event.id].sprite);
-}
-socket.on("playerMoved", (event) => {
-    if (!event)
-        return;
-    if (players[event.id] != null) {
-        players[event.id].pos = event.pos;
-    }
-});
-socket.on("initPlayer", (event) => {
-    if (!event)
-        return;
-    localId = event.id;
-    players = event.playerList;
-    initialized = true;
-    for (let [id, player] of Object.entries(players)) {
-        addPlayer({
-            id,
-            pos: player.pos,
-            moveSpeed: player.moveSpeed
+let gameApp = new gameApp_1.GameApp(window.innerWidth, window.innerHeight, 0x00a1db, socket);
+gameApp.registerListeners(socket);
+input_1.Input.registerListeners();
+player_1.Player.registerListeners(socket, gameApp.stage);
+
+},{"./gameApp":13,"./input":16,"./player":17,"socket.io-client":85}],16:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.Input = void 0;
+class Input {
+    static registerListeners() {
+        document.addEventListener("keydown", (event) => {
+            if (!this.pressedKeys.includes(event.key))
+                this.pressedKeys.push(event.key);
+        });
+        document.addEventListener("keyup", (event) => {
+            let i = this.pressedKeys.findIndex((val) => { return (val === event.key); });
+            if (i != -1)
+                this.pressedKeys.splice(i, 1);
+        });
+        window.addEventListener("blur", () => {
+            if (this.pressedKeys.length > 0)
+                this.pressedKeys = [];
         });
     }
-    console.log(localId);
-});
-socket.on("addPlayer", (event) => {
-    if (!event)
-        return;
-    addPlayer(event);
-});
-socket.on("removePlayer", (event) => {
-    if (!event)
-        return;
-    app.stage.removeChild(players[event.id].sprite);
-    delete players[event.id];
-    delete smoothPlayerPositions[event.id];
-});
-let pressedKeys = [];
-document.addEventListener("keydown", (event) => {
-    if (!pressedKeys.includes(event.key))
-        pressedKeys.push(event.key);
-});
-document.addEventListener("keyup", (event) => {
-    let i = pressedKeys.findIndex((val) => { return (val === event.key); });
-    if (i != -1)
-        pressedKeys.splice(i, 1);
-});
-window.onblur = () => {
-    if (pressedKeys.length > 0)
-        pressedKeys = [];
-};
-window.addEventListener("resize", () => {
-    app.renderer.resize(window.innerWidth, window.innerHeight);
-});
-app.ticker.add((delta) => {
-    update(delta);
-});
-function lerp(start, end, steps, delta) {
-    return (start + (end - start) / (steps / delta));
+    static isKeyPressed(key) {
+        return this.pressedKeys.includes(key);
+    }
 }
-function vectorLerp(start, end, steps, delta) {
-    return {
-        x: lerp(start.x, end.x, steps, delta),
-        y: lerp(start.y, end.y, steps, delta)
-    };
-}
-function update(delta) {
-    if (!initialized)
-        return;
-    updateLocalPlayer(delta);
-    for (let [id, player] of Object.entries(players)) {
-        if (id != localId) {
-            smoothPlayerPositions[id] = vectorLerp(smoothPlayerPositions[id], player.pos, smoothSteps, delta);
+exports.Input = Input;
+Input.pressedKeys = [];
+
+},{}],17:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.Player = void 0;
+const entity_1 = require("./entity");
+const input_1 = require("./input");
+const vector_1 = require("./vector");
+class Player extends entity_1.Entity {
+    constructor(pos, moveSpeed, stage, id) {
+        super(pos, moveSpeed, stage);
+        this.id = id;
+        this.stage = stage;
+        Player.playerList[this.id] = this;
+    }
+    static updateLocalPlayer(socket, delta) {
+        let localPlayer = Player.playerList[socket.id];
+        if (!localPlayer)
+            return;
+        localPlayer.updateLocal(socket, delta);
+    }
+    updateLocal(socket, delta) {
+        let moveInputX = 0;
+        let moveInputY = 0;
+        if (input_1.Input.isKeyPressed("w") || input_1.Input.isKeyPressed("ArrowUp"))
+            moveInputY -= 1;
+        if (input_1.Input.isKeyPressed("s") || input_1.Input.isKeyPressed("ArrowDown"))
+            moveInputY += 1;
+        if (input_1.Input.isKeyPressed("a") || input_1.Input.isKeyPressed("ArrowLeft"))
+            moveInputX -= 1;
+        if (input_1.Input.isKeyPressed("d") || input_1.Input.isKeyPressed("ArrowRight"))
+            moveInputX += 1;
+        let moveInputMagnitude = Math.sqrt(moveInputX * moveInputX + moveInputY * moveInputY);
+        if (moveInputMagnitude != 0) {
+            moveInputX /= moveInputMagnitude;
+            moveInputY /= moveInputMagnitude;
+        }
+        let deltaSpeed = this.moveSpeed * delta;
+        this.pos.x += moveInputX * deltaSpeed;
+        this.pos.y += moveInputY * deltaSpeed;
+        socket.emit("playerMoved", {
+            id: this.id,
+            pos: this.pos
+        });
+    }
+    static updateAll(localId, delta) {
+        for (let [_, player] of Object.entries(Player.playerList)) {
+            player.update(localId, delta);
+        }
+    }
+    update(localId, delta) {
+        if (this.id != localId) {
+            this.smoothPos = vector_1.Vector.lerp(this.smoothPos, this.pos, Player.smoothSteps, delta);
         }
         else {
-            smoothPlayerPositions[id] = player.pos;
+            this.smoothPos = this.pos;
         }
-        player.sprite.x = smoothPlayerPositions[id].x;
-        player.sprite.y = smoothPlayerPositions[id].y;
+        this.sprite.x = this.smoothPos.x;
+        this.sprite.y = this.smoothPos.y;
+    }
+    delete() {
+        this.stage.removeChild(Player.playerList[this.id].sprite);
+        delete Player.playerList[this.id];
+    }
+    static registerListeners(socket, stage) {
+        socket.on("playerMoved", (event) => {
+            if (!event)
+                return;
+            if (Player.playerList[event.id] != null) {
+                Player.playerList[event.id].pos = event.pos;
+            }
+        });
+        socket.on("addPlayer", (event) => {
+            if (!event)
+                return;
+            new Player(event.entityData.pos, event.entityData.moveSpeed, stage, event.id);
+        });
+        socket.on("removePlayer", (event) => {
+            if (!event)
+                return;
+            Player.playerList[event.id].delete();
+        });
     }
 }
-;
-function updateLocalPlayer(delta) {
-    let localPlayer = players[localId];
-    if (!localPlayer)
-        return;
-    let moveInputX = 0;
-    let moveInputY = 0;
-    if (pressedKeys.includes("w") || pressedKeys.includes("ArrowUp")) {
-        moveInputY -= 1;
-    }
-    if (pressedKeys.includes("s") || pressedKeys.includes("ArrowDown")) {
-        moveInputY += 1;
-    }
-    if (pressedKeys.includes("a") || pressedKeys.includes("ArrowLeft")) {
-        moveInputX -= 1;
-    }
-    if (pressedKeys.includes("d") || pressedKeys.includes("ArrowRight")) {
-        moveInputX += 1;
-    }
-    let moveInputMagnitude = Math.sqrt(moveInputX * moveInputX + moveInputY * moveInputY);
-    if (moveInputMagnitude != 0) {
-        moveInputX /= moveInputMagnitude;
-        moveInputY /= moveInputMagnitude;
-    }
-    let deltaSpeed = localPlayer.moveSpeed * delta;
-    localPlayer.pos.x += moveInputX * deltaSpeed;
-    localPlayer.pos.y += moveInputY * deltaSpeed;
-    socket.emit("playerMoved", {
-        id: localId,
-        pos: localPlayer.pos
-    });
-}
+exports.Player = Player;
+Player.playerList = {};
 
-},{"pixi.js":77,"socket.io-client":79}],13:[function(require,module,exports){
+},{"./entity":12,"./input":16,"./vector":18}],18:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.Vector = void 0;
+const gameMath_1 = require("./gameMath");
+class Vector {
+    constructor(x, y) {
+        this.x = 0;
+        this.y = 0;
+        this.x = x;
+        this.y = y;
+    }
+    static lerp(from, to, steps, delta) {
+        let x = gameMath_1.GameMath.lerp(from.x, to.x, steps, delta);
+        let y = gameMath_1.GameMath.lerp(from.y, to.y, steps, delta);
+        return new Vector(x, y);
+    }
+}
+exports.Vector = Vector;
+
+},{"./gameMath":14}],19:[function(require,module,exports){
 /*!
  * @pixi/accessibility - v6.2.1
  * Compiled Tue, 21 Dec 2021 19:56:15 UTC
@@ -4468,7 +4562,7 @@ exports.AccessibilityManager = AccessibilityManager;
 exports.accessibleTarget = accessibleTarget;
 
 
-},{"@pixi/display":18,"@pixi/utils":47}],14:[function(require,module,exports){
+},{"@pixi/display":24,"@pixi/utils":53}],20:[function(require,module,exports){
 /*!
  * @pixi/app - v6.2.1
  * Compiled Tue, 21 Dec 2021 19:56:15 UTC
@@ -4743,7 +4837,7 @@ Application.registerPlugin(ResizePlugin);
 exports.Application = Application;
 
 
-},{"@pixi/core":17,"@pixi/display":18}],15:[function(require,module,exports){
+},{"@pixi/core":23,"@pixi/display":24}],21:[function(require,module,exports){
 /*!
  * @pixi/compressed-textures - v6.2.1
  * Compiled Tue, 21 Dec 2021 19:56:15 UTC
@@ -5951,7 +6045,7 @@ exports.TYPES_TO_BYTES_PER_COMPONENT = TYPES_TO_BYTES_PER_COMPONENT;
 exports.TYPES_TO_BYTES_PER_PIXEL = TYPES_TO_BYTES_PER_PIXEL;
 
 
-},{"@pixi/constants":16,"@pixi/core":17,"@pixi/loaders":28,"@pixi/utils":47}],16:[function(require,module,exports){
+},{"@pixi/constants":22,"@pixi/core":23,"@pixi/loaders":34,"@pixi/utils":53}],22:[function(require,module,exports){
 /*!
  * @pixi/constants - v6.2.1
  * Compiled Tue, 21 Dec 2021 19:56:15 UTC
@@ -6143,7 +6237,7 @@ Object.defineProperty(exports, '__esModule', { value: true });
 })(exports.BUFFER_TYPE || (exports.BUFFER_TYPE = {}));
 
 
-},{}],17:[function(require,module,exports){
+},{}],23:[function(require,module,exports){
 /*!
  * @pixi/core - v6.2.1
  * Compiled Tue, 21 Dec 2021 19:56:15 UTC
@@ -17237,7 +17331,7 @@ exports.systems = systems;
 exports.uniformParsers = uniformParsers;
 
 
-},{"@pixi/constants":16,"@pixi/math":29,"@pixi/runner":38,"@pixi/settings":39,"@pixi/ticker":46,"@pixi/utils":47}],18:[function(require,module,exports){
+},{"@pixi/constants":22,"@pixi/math":35,"@pixi/runner":44,"@pixi/settings":45,"@pixi/ticker":52,"@pixi/utils":53}],24:[function(require,module,exports){
 /*!
  * @pixi/display - v6.2.1
  * Compiled Tue, 21 Dec 2021 19:56:15 UTC
@@ -19753,7 +19847,7 @@ exports.DisplayObject = DisplayObject;
 exports.TemporaryDisplayObject = TemporaryDisplayObject;
 
 
-},{"@pixi/math":29,"@pixi/settings":39,"@pixi/utils":47}],19:[function(require,module,exports){
+},{"@pixi/math":35,"@pixi/settings":45,"@pixi/utils":53}],25:[function(require,module,exports){
 /*!
  * @pixi/extract - v6.2.1
  * Compiled Tue, 21 Dec 2021 19:56:15 UTC
@@ -19972,7 +20066,7 @@ var Extract = /** @class */ (function () {
 exports.Extract = Extract;
 
 
-},{"@pixi/core":17,"@pixi/math":29,"@pixi/utils":47}],20:[function(require,module,exports){
+},{"@pixi/core":23,"@pixi/math":35,"@pixi/utils":53}],26:[function(require,module,exports){
 /*!
  * @pixi/filter-alpha - v6.2.1
  * Compiled Tue, 21 Dec 2021 19:56:15 UTC
@@ -20064,7 +20158,7 @@ var AlphaFilter = /** @class */ (function (_super) {
 exports.AlphaFilter = AlphaFilter;
 
 
-},{"@pixi/core":17}],21:[function(require,module,exports){
+},{"@pixi/core":23}],27:[function(require,module,exports){
 /*!
  * @pixi/filter-blur - v6.2.1
  * Compiled Tue, 21 Dec 2021 19:56:15 UTC
@@ -20973,7 +21067,7 @@ exports.BlurFilter = BlurFilter;
 exports.BlurFilterPass = BlurFilterPass;
 
 
-},{"@pixi/core":17,"@pixi/settings":39}],22:[function(require,module,exports){
+},{"@pixi/core":23,"@pixi/settings":45}],28:[function(require,module,exports){
 /*!
  * @pixi/filter-color-matrix - v6.2.1
  * Compiled Tue, 21 Dec 2021 19:56:15 UTC
@@ -21523,7 +21617,7 @@ ColorMatrixFilter.prototype.grayscale = ColorMatrixFilter.prototype.greyscale;
 exports.ColorMatrixFilter = ColorMatrixFilter;
 
 
-},{"@pixi/core":17}],23:[function(require,module,exports){
+},{"@pixi/core":23}],29:[function(require,module,exports){
 /*!
  * @pixi/filter-displacement - v6.2.1
  * Compiled Tue, 21 Dec 2021 19:56:15 UTC
@@ -21658,7 +21752,7 @@ var DisplacementFilter = /** @class */ (function (_super) {
 exports.DisplacementFilter = DisplacementFilter;
 
 
-},{"@pixi/core":17,"@pixi/math":29}],24:[function(require,module,exports){
+},{"@pixi/core":23,"@pixi/math":35}],30:[function(require,module,exports){
 /*!
  * @pixi/filter-fxaa - v6.2.1
  * Compiled Tue, 21 Dec 2021 19:56:15 UTC
@@ -21725,7 +21819,7 @@ var FXAAFilter = /** @class */ (function (_super) {
 exports.FXAAFilter = FXAAFilter;
 
 
-},{"@pixi/core":17}],25:[function(require,module,exports){
+},{"@pixi/core":23}],31:[function(require,module,exports){
 /*!
  * @pixi/filter-noise - v6.2.1
  * Compiled Tue, 21 Dec 2021 19:56:15 UTC
@@ -21827,7 +21921,7 @@ var NoiseFilter = /** @class */ (function (_super) {
 exports.NoiseFilter = NoiseFilter;
 
 
-},{"@pixi/core":17}],26:[function(require,module,exports){
+},{"@pixi/core":23}],32:[function(require,module,exports){
 /*!
  * @pixi/graphics - v6.2.1
  * Compiled Tue, 21 Dec 2021 19:56:15 UTC
@@ -24875,7 +24969,7 @@ exports.LineStyle = LineStyle;
 exports.graphicsUtils = graphicsUtils;
 
 
-},{"@pixi/constants":16,"@pixi/core":17,"@pixi/display":18,"@pixi/math":29,"@pixi/utils":47}],27:[function(require,module,exports){
+},{"@pixi/constants":22,"@pixi/core":23,"@pixi/display":24,"@pixi/math":35,"@pixi/utils":53}],33:[function(require,module,exports){
 /*!
  * @pixi/interaction - v6.2.1
  * Compiled Tue, 21 Dec 2021 19:56:15 UTC
@@ -27130,7 +27224,7 @@ exports.InteractionTrackingData = InteractionTrackingData;
 exports.interactiveTarget = interactiveTarget;
 
 
-},{"@pixi/display":18,"@pixi/math":29,"@pixi/ticker":46,"@pixi/utils":47}],28:[function(require,module,exports){
+},{"@pixi/display":24,"@pixi/math":35,"@pixi/ticker":52,"@pixi/utils":53}],34:[function(require,module,exports){
 /*!
  * @pixi/loaders - v6.2.1
  * Compiled Tue, 21 Dec 2021 19:56:15 UTC
@@ -29159,7 +29253,7 @@ exports.Loader = Loader;
 exports.TextureLoader = TextureLoader;
 
 
-},{"@pixi/core":17}],29:[function(require,module,exports){
+},{"@pixi/core":23}],35:[function(require,module,exports){
 /*!
  * @pixi/math - v6.2.1
  * Compiled Tue, 21 Dec 2021 19:56:15 UTC
@@ -30786,7 +30880,7 @@ exports.Transform = Transform;
 exports.groupD8 = groupD8;
 
 
-},{}],30:[function(require,module,exports){
+},{}],36:[function(require,module,exports){
 /*!
  * @pixi/mesh-extras - v6.2.1
  * Compiled Tue, 21 Dec 2021 19:56:15 UTC
@@ -31457,7 +31551,7 @@ exports.SimplePlane = SimplePlane;
 exports.SimpleRope = SimpleRope;
 
 
-},{"@pixi/constants":16,"@pixi/core":17,"@pixi/mesh":31}],31:[function(require,module,exports){
+},{"@pixi/constants":22,"@pixi/core":23,"@pixi/mesh":37}],37:[function(require,module,exports){
 /*!
  * @pixi/mesh - v6.2.1
  * Compiled Tue, 21 Dec 2021 19:56:15 UTC
@@ -32120,7 +32214,7 @@ exports.MeshGeometry = MeshGeometry;
 exports.MeshMaterial = MeshMaterial;
 
 
-},{"@pixi/constants":16,"@pixi/core":17,"@pixi/display":18,"@pixi/math":29,"@pixi/settings":39,"@pixi/utils":47}],32:[function(require,module,exports){
+},{"@pixi/constants":22,"@pixi/core":23,"@pixi/display":24,"@pixi/math":35,"@pixi/settings":45,"@pixi/utils":53}],38:[function(require,module,exports){
 /*!
  * @pixi/mixin-cache-as-bitmap - v6.2.1
  * Compiled Tue, 21 Dec 2021 19:56:15 UTC
@@ -33033,7 +33127,7 @@ display.DisplayObject.prototype._cacheAsBitmapDestroy = function _cacheAsBitmapD
 exports.CacheData = CacheData;
 
 
-},{"@pixi/core":17,"@pixi/display":18,"@pixi/math":29,"@pixi/settings":39,"@pixi/sprite":42,"@pixi/utils":47}],33:[function(require,module,exports){
+},{"@pixi/core":23,"@pixi/display":24,"@pixi/math":35,"@pixi/settings":45,"@pixi/sprite":48,"@pixi/utils":53}],39:[function(require,module,exports){
 /*!
  * @pixi/mixin-get-child-by-name - v6.2.1
  * Compiled Tue, 21 Dec 2021 19:56:15 UTC
@@ -33085,7 +33179,7 @@ display.Container.prototype.getChildByName = function getChildByName(name, deep)
 };
 
 
-},{"@pixi/display":18}],34:[function(require,module,exports){
+},{"@pixi/display":24}],40:[function(require,module,exports){
 /*!
  * @pixi/mixin-get-global-position - v6.2.1
  * Compiled Tue, 21 Dec 2021 19:56:15 UTC
@@ -33123,7 +33217,7 @@ display.DisplayObject.prototype.getGlobalPosition = function getGlobalPosition(p
 };
 
 
-},{"@pixi/display":18,"@pixi/math":29}],35:[function(require,module,exports){
+},{"@pixi/display":24,"@pixi/math":35}],41:[function(require,module,exports){
 /*!
  * @pixi/particle-container - v6.2.1
  * Compiled Tue, 21 Dec 2021 19:56:15 UTC
@@ -33940,7 +34034,7 @@ exports.ParticleContainer = ParticleContainer;
 exports.ParticleRenderer = ParticleRenderer;
 
 
-},{"@pixi/constants":16,"@pixi/core":17,"@pixi/display":18,"@pixi/math":29,"@pixi/utils":47}],36:[function(require,module,exports){
+},{"@pixi/constants":22,"@pixi/core":23,"@pixi/display":24,"@pixi/math":35,"@pixi/utils":53}],42:[function(require,module,exports){
 /*!
  * @pixi/polyfill - v6.2.1
  * Compiled Tue, 21 Dec 2021 19:56:15 UTC
@@ -34059,7 +34153,7 @@ if (!self.Int32Array) {
 }
 
 
-},{"object-assign":74,"promise-polyfill":78}],37:[function(require,module,exports){
+},{"object-assign":80,"promise-polyfill":84}],43:[function(require,module,exports){
 /*!
  * @pixi/prepare - v6.2.1
  * Compiled Tue, 21 Dec 2021 19:56:15 UTC
@@ -34626,7 +34720,7 @@ exports.Prepare = Prepare;
 exports.TimeLimiter = TimeLimiter;
 
 
-},{"@pixi/core":17,"@pixi/display":18,"@pixi/graphics":26,"@pixi/settings":39,"@pixi/text":45,"@pixi/ticker":46}],38:[function(require,module,exports){
+},{"@pixi/core":23,"@pixi/display":24,"@pixi/graphics":32,"@pixi/settings":45,"@pixi/text":51,"@pixi/ticker":52}],44:[function(require,module,exports){
 /*!
  * @pixi/runner - v6.2.1
  * Compiled Tue, 21 Dec 2021 19:56:15 UTC
@@ -34823,7 +34917,7 @@ Object.defineProperties(Runner.prototype, {
 exports.Runner = Runner;
 
 
-},{}],39:[function(require,module,exports){
+},{}],45:[function(require,module,exports){
 /*!
  * @pixi/settings - v6.2.1
  * Compiled Tue, 21 Dec 2021 19:56:15 UTC
@@ -35639,7 +35733,7 @@ exports.isMobile = isMobile;
 exports.settings = settings;
 
 
-},{"ismobilejs":71}],40:[function(require,module,exports){
+},{"ismobilejs":77}],46:[function(require,module,exports){
 /*!
  * @pixi/sprite-animated - v6.2.1
  * Compiled Tue, 21 Dec 2021 19:56:15 UTC
@@ -35998,7 +36092,7 @@ var AnimatedSprite = /** @class */ (function (_super) {
 exports.AnimatedSprite = AnimatedSprite;
 
 
-},{"@pixi/core":17,"@pixi/sprite":42,"@pixi/ticker":46}],41:[function(require,module,exports){
+},{"@pixi/core":23,"@pixi/sprite":48,"@pixi/ticker":52}],47:[function(require,module,exports){
 /*!
  * @pixi/sprite-tiling - v6.2.1
  * Compiled Tue, 21 Dec 2021 19:56:15 UTC
@@ -36373,7 +36467,7 @@ exports.TilingSprite = TilingSprite;
 exports.TilingSpriteRenderer = TilingSpriteRenderer;
 
 
-},{"@pixi/constants":16,"@pixi/core":17,"@pixi/math":29,"@pixi/sprite":42,"@pixi/utils":47}],42:[function(require,module,exports){
+},{"@pixi/constants":22,"@pixi/core":23,"@pixi/math":35,"@pixi/sprite":48,"@pixi/utils":53}],48:[function(require,module,exports){
 /*!
  * @pixi/sprite - v6.2.1
  * Compiled Tue, 21 Dec 2021 19:56:15 UTC
@@ -36839,7 +36933,7 @@ var Sprite = /** @class */ (function (_super) {
 exports.Sprite = Sprite;
 
 
-},{"@pixi/constants":16,"@pixi/core":17,"@pixi/display":18,"@pixi/math":29,"@pixi/settings":39,"@pixi/utils":47}],43:[function(require,module,exports){
+},{"@pixi/constants":22,"@pixi/core":23,"@pixi/display":24,"@pixi/math":35,"@pixi/settings":45,"@pixi/utils":53}],49:[function(require,module,exports){
 /*!
  * @pixi/spritesheet - v6.2.1
  * Compiled Tue, 21 Dec 2021 19:56:15 UTC
@@ -37166,7 +37260,7 @@ exports.Spritesheet = Spritesheet;
 exports.SpritesheetLoader = SpritesheetLoader;
 
 
-},{"@pixi/core":17,"@pixi/loaders":28,"@pixi/math":29,"@pixi/utils":47}],44:[function(require,module,exports){
+},{"@pixi/core":23,"@pixi/loaders":34,"@pixi/math":35,"@pixi/utils":53}],50:[function(require,module,exports){
 /*!
  * @pixi/text-bitmap - v6.2.1
  * Compiled Tue, 21 Dec 2021 19:56:15 UTC
@@ -38774,7 +38868,7 @@ exports.BitmapFontLoader = BitmapFontLoader;
 exports.BitmapText = BitmapText;
 
 
-},{"@pixi/constants":16,"@pixi/core":17,"@pixi/display":18,"@pixi/loaders":28,"@pixi/math":29,"@pixi/mesh":31,"@pixi/settings":39,"@pixi/text":45,"@pixi/utils":47}],45:[function(require,module,exports){
+},{"@pixi/constants":22,"@pixi/core":23,"@pixi/display":24,"@pixi/loaders":34,"@pixi/math":35,"@pixi/mesh":37,"@pixi/settings":45,"@pixi/text":51,"@pixi/utils":53}],51:[function(require,module,exports){
 /*!
  * @pixi/text - v6.2.1
  * Compiled Tue, 21 Dec 2021 19:56:15 UTC
@@ -40684,7 +40778,7 @@ exports.TextMetrics = TextMetrics;
 exports.TextStyle = TextStyle;
 
 
-},{"@pixi/core":17,"@pixi/math":29,"@pixi/settings":39,"@pixi/sprite":42,"@pixi/utils":47}],46:[function(require,module,exports){
+},{"@pixi/core":23,"@pixi/math":35,"@pixi/settings":45,"@pixi/sprite":48,"@pixi/utils":53}],52:[function(require,module,exports){
 /*!
  * @pixi/ticker - v6.2.1
  * Compiled Tue, 21 Dec 2021 19:56:15 UTC
@@ -41437,7 +41531,7 @@ exports.Ticker = Ticker;
 exports.TickerPlugin = TickerPlugin;
 
 
-},{"@pixi/settings":39}],47:[function(require,module,exports){
+},{"@pixi/settings":45}],53:[function(require,module,exports){
 /*!
  * @pixi/utils - v6.2.1
  * Compiled Tue, 21 Dec 2021 19:56:15 UTC
@@ -42675,7 +42769,7 @@ exports.uid = uid;
 exports.url = url;
 
 
-},{"@pixi/constants":16,"@pixi/settings":39,"earcut":53,"eventemitter3":69,"url":10}],48:[function(require,module,exports){
+},{"@pixi/constants":22,"@pixi/settings":45,"earcut":59,"eventemitter3":75,"url":10}],54:[function(require,module,exports){
 /*
  * base64-arraybuffer 1.0.1 <https://github.com/niklasvh/base64-arraybuffer>
  * Copyright (c) 2022 Niklas von Hertzen <https://hertzen.com>
@@ -42738,7 +42832,7 @@ exports.url = url;
 })));
 
 
-},{}],49:[function(require,module,exports){
+},{}],55:[function(require,module,exports){
 
 /**
  * Expose `Emitter`.
@@ -42916,7 +43010,7 @@ Emitter.prototype.hasListeners = function(event){
   return !! this.listeners(event).length;
 };
 
-},{}],50:[function(require,module,exports){
+},{}],56:[function(require,module,exports){
 
 /**
  * Expose `Backoff`.
@@ -43003,7 +43097,7 @@ Backoff.prototype.setJitter = function(jitter){
 };
 
 
-},{}],51:[function(require,module,exports){
+},{}],57:[function(require,module,exports){
 (function (process){(function (){
 /* eslint-env browser */
 
@@ -43276,7 +43370,7 @@ formatters.j = function (v) {
 };
 
 }).call(this)}).call(this,require('_process'))
-},{"./common":52,"_process":4}],52:[function(require,module,exports){
+},{"./common":58,"_process":4}],58:[function(require,module,exports){
 
 /**
  * This is the common logic for both the Node.js and web browser
@@ -43552,7 +43646,7 @@ function setup(env) {
 
 module.exports = setup;
 
-},{"ms":73}],53:[function(require,module,exports){
+},{"ms":79}],59:[function(require,module,exports){
 'use strict';
 
 module.exports = earcut;
@@ -44238,7 +44332,7 @@ earcut.flatten = function (data) {
     return result;
 };
 
-},{}],54:[function(require,module,exports){
+},{}],60:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.default = (() => {
@@ -44253,7 +44347,7 @@ exports.default = (() => {
     }
 })();
 
-},{}],55:[function(require,module,exports){
+},{}],61:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.installTimerFunctions = exports.transports = exports.Transport = exports.protocol = exports.Socket = void 0;
@@ -44267,7 +44361,7 @@ Object.defineProperty(exports, "transports", { enumerable: true, get: function (
 var util_js_1 = require("./util.js");
 Object.defineProperty(exports, "installTimerFunctions", { enumerable: true, get: function () { return util_js_1.installTimerFunctions; } });
 
-},{"./socket.js":56,"./transport.js":57,"./transports/index.js":58,"./util.js":64}],56:[function(require,module,exports){
+},{"./socket.js":62,"./transport.js":63,"./transports/index.js":64,"./util.js":70}],62:[function(require,module,exports){
 "use strict";
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
@@ -44859,7 +44953,7 @@ function clone(obj) {
     return o;
 }
 
-},{"./transports/index.js":58,"./util.js":64,"@socket.io/component-emitter":49,"debug":51,"engine.io-parser":68,"parseqs":75,"parseuri":76}],57:[function(require,module,exports){
+},{"./transports/index.js":64,"./util.js":70,"@socket.io/component-emitter":55,"debug":57,"engine.io-parser":74,"parseqs":81,"parseuri":82}],63:[function(require,module,exports){
 "use strict";
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
@@ -44982,7 +45076,7 @@ class Transport extends component_emitter_1.Emitter {
 }
 exports.Transport = Transport;
 
-},{"./util.js":64,"@socket.io/component-emitter":49,"debug":51,"engine.io-parser":68}],58:[function(require,module,exports){
+},{"./util.js":70,"@socket.io/component-emitter":55,"debug":57,"engine.io-parser":74}],64:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.transports = void 0;
@@ -44993,7 +45087,7 @@ exports.transports = {
     polling: polling_xhr_js_1.XHR
 };
 
-},{"./polling-xhr.js":59,"./websocket.js":62}],59:[function(require,module,exports){
+},{"./polling-xhr.js":65,"./websocket.js":68}],65:[function(require,module,exports){
 "use strict";
 /* global attachEvent */
 var __importDefault = (this && this.__importDefault) || function (mod) {
@@ -45273,7 +45367,7 @@ function unloadHandler() {
     }
 }
 
-},{"../globalThis.js":54,"../util.js":64,"./polling.js":60,"./xmlhttprequest.js":63,"@socket.io/component-emitter":49,"debug":51}],60:[function(require,module,exports){
+},{"../globalThis.js":60,"../util.js":70,"./polling.js":66,"./xmlhttprequest.js":69,"@socket.io/component-emitter":55,"debug":57}],66:[function(require,module,exports){
 "use strict";
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
@@ -45459,7 +45553,7 @@ class Polling extends transport_js_1.Transport {
 }
 exports.Polling = Polling;
 
-},{"../transport.js":57,"debug":51,"engine.io-parser":68,"parseqs":75,"yeast":87}],61:[function(require,module,exports){
+},{"../transport.js":63,"debug":57,"engine.io-parser":74,"parseqs":81,"yeast":93}],67:[function(require,module,exports){
 "use strict";
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
@@ -45480,7 +45574,7 @@ exports.WebSocket = globalThis_js_1.default.WebSocket || globalThis_js_1.default
 exports.usingBrowserWebSocket = true;
 exports.defaultBinaryType = "arraybuffer";
 
-},{"../globalThis.js":54}],62:[function(require,module,exports){
+},{"../globalThis.js":60}],68:[function(require,module,exports){
 (function (Buffer){(function (){
 "use strict";
 var __importDefault = (this && this.__importDefault) || function (mod) {
@@ -45678,7 +45772,7 @@ class WS extends transport_js_1.Transport {
 exports.WS = WS;
 
 }).call(this)}).call(this,require("buffer").Buffer)
-},{"../transport.js":57,"../util.js":64,"./websocket-constructor.js":61,"buffer":2,"debug":51,"engine.io-parser":68,"parseqs":75,"yeast":87}],63:[function(require,module,exports){
+},{"../transport.js":63,"../util.js":70,"./websocket-constructor.js":67,"buffer":2,"debug":57,"engine.io-parser":74,"parseqs":81,"yeast":93}],69:[function(require,module,exports){
 "use strict";
 // browser shim for xmlhttprequest module
 var __importDefault = (this && this.__importDefault) || function (mod) {
@@ -45705,7 +45799,7 @@ function default_1(opts) {
 }
 exports.default = default_1;
 
-},{"../globalThis.js":54,"has-cors":70}],64:[function(require,module,exports){
+},{"../globalThis.js":60,"has-cors":76}],70:[function(require,module,exports){
 "use strict";
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
@@ -45737,7 +45831,7 @@ function installTimerFunctions(obj, opts) {
 }
 exports.installTimerFunctions = installTimerFunctions;
 
-},{"./globalThis.js":54}],65:[function(require,module,exports){
+},{"./globalThis.js":60}],71:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ERROR_PACKET = exports.PACKET_TYPES_REVERSE = exports.PACKET_TYPES = void 0;
@@ -45758,7 +45852,7 @@ Object.keys(PACKET_TYPES).forEach(key => {
 const ERROR_PACKET = { type: "error", data: "parser error" };
 exports.ERROR_PACKET = ERROR_PACKET;
 
-},{}],66:[function(require,module,exports){
+},{}],72:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const commons_js_1 = require("./commons.js");
@@ -45811,7 +45905,7 @@ const mapBinary = (data, binaryType) => {
 };
 exports.default = decodePacket;
 
-},{"./commons.js":65,"@socket.io/base64-arraybuffer":48}],67:[function(require,module,exports){
+},{"./commons.js":71,"@socket.io/base64-arraybuffer":54}],73:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const commons_js_1 = require("./commons.js");
@@ -45856,7 +45950,7 @@ const encodeBlobAsBase64 = (data, callback) => {
 };
 exports.default = encodePacket;
 
-},{"./commons.js":65}],68:[function(require,module,exports){
+},{"./commons.js":71}],74:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.decodePayload = exports.decodePacket = exports.encodePayload = exports.encodePacket = exports.protocol = void 0;
@@ -45896,7 +45990,7 @@ const decodePayload = (encodedPayload, binaryType) => {
 exports.decodePayload = decodePayload;
 exports.protocol = 4;
 
-},{"./decodePacket.js":66,"./encodePacket.js":67}],69:[function(require,module,exports){
+},{"./decodePacket.js":72,"./encodePacket.js":73}],75:[function(require,module,exports){
 'use strict';
 
 var has = Object.prototype.hasOwnProperty
@@ -46234,7 +46328,7 @@ if ('undefined' !== typeof module) {
   module.exports = EventEmitter;
 }
 
-},{}],70:[function(require,module,exports){
+},{}],76:[function(require,module,exports){
 
 /**
  * Module exports.
@@ -46253,7 +46347,7 @@ try {
   module.exports = false;
 }
 
-},{}],71:[function(require,module,exports){
+},{}],77:[function(require,module,exports){
 "use strict";
 function __export(m) {
     for (var p in m) if (!exports.hasOwnProperty(p)) exports[p] = m[p];
@@ -46263,7 +46357,7 @@ __export(require("./isMobile"));
 var isMobile_1 = require("./isMobile");
 exports["default"] = isMobile_1["default"];
 
-},{"./isMobile":72}],72:[function(require,module,exports){
+},{"./isMobile":78}],78:[function(require,module,exports){
 "use strict";
 exports.__esModule = true;
 var appleIphone = /iPhone/i;
@@ -46392,7 +46486,7 @@ function isMobile(param) {
 }
 exports["default"] = isMobile;
 
-},{}],73:[function(require,module,exports){
+},{}],79:[function(require,module,exports){
 /**
  * Helpers.
  */
@@ -46556,7 +46650,7 @@ function plural(ms, msAbs, n, name) {
   return Math.round(ms / n) + ' ' + name + (isPlural ? 's' : '');
 }
 
-},{}],74:[function(require,module,exports){
+},{}],80:[function(require,module,exports){
 /*
 object-assign
 (c) Sindre Sorhus
@@ -46648,7 +46742,7 @@ module.exports = shouldUseNative() ? Object.assign : function (target, source) {
 	return to;
 };
 
-},{}],75:[function(require,module,exports){
+},{}],81:[function(require,module,exports){
 /**
  * Compiles a querystring
  * Returns string representation of the object
@@ -46687,7 +46781,7 @@ exports.decode = function(qs){
   return qry;
 };
 
-},{}],76:[function(require,module,exports){
+},{}],82:[function(require,module,exports){
 /**
  * Parses an URI
  *
@@ -46757,7 +46851,7 @@ function queryKey(uri, query) {
     return data;
 }
 
-},{}],77:[function(require,module,exports){
+},{}],83:[function(require,module,exports){
 /*!
  * pixi.js - v6.2.1
  * Compiled Tue, 21 Dec 2021 19:56:15 UTC
@@ -47069,7 +47163,7 @@ exports.VERSION = VERSION;
 exports.filters = filters;
 
 
-},{"@pixi/accessibility":13,"@pixi/app":14,"@pixi/compressed-textures":15,"@pixi/constants":16,"@pixi/core":17,"@pixi/display":18,"@pixi/extract":19,"@pixi/filter-alpha":20,"@pixi/filter-blur":21,"@pixi/filter-color-matrix":22,"@pixi/filter-displacement":23,"@pixi/filter-fxaa":24,"@pixi/filter-noise":25,"@pixi/graphics":26,"@pixi/interaction":27,"@pixi/loaders":28,"@pixi/math":29,"@pixi/mesh":31,"@pixi/mesh-extras":30,"@pixi/mixin-cache-as-bitmap":32,"@pixi/mixin-get-child-by-name":33,"@pixi/mixin-get-global-position":34,"@pixi/particle-container":35,"@pixi/polyfill":36,"@pixi/prepare":37,"@pixi/runner":38,"@pixi/settings":39,"@pixi/sprite":42,"@pixi/sprite-animated":40,"@pixi/sprite-tiling":41,"@pixi/spritesheet":43,"@pixi/text":45,"@pixi/text-bitmap":44,"@pixi/ticker":46,"@pixi/utils":47}],78:[function(require,module,exports){
+},{"@pixi/accessibility":19,"@pixi/app":20,"@pixi/compressed-textures":21,"@pixi/constants":22,"@pixi/core":23,"@pixi/display":24,"@pixi/extract":25,"@pixi/filter-alpha":26,"@pixi/filter-blur":27,"@pixi/filter-color-matrix":28,"@pixi/filter-displacement":29,"@pixi/filter-fxaa":30,"@pixi/filter-noise":31,"@pixi/graphics":32,"@pixi/interaction":33,"@pixi/loaders":34,"@pixi/math":35,"@pixi/mesh":37,"@pixi/mesh-extras":36,"@pixi/mixin-cache-as-bitmap":38,"@pixi/mixin-get-child-by-name":39,"@pixi/mixin-get-global-position":40,"@pixi/particle-container":41,"@pixi/polyfill":42,"@pixi/prepare":43,"@pixi/runner":44,"@pixi/settings":45,"@pixi/sprite":48,"@pixi/sprite-animated":46,"@pixi/sprite-tiling":47,"@pixi/spritesheet":49,"@pixi/text":51,"@pixi/text-bitmap":50,"@pixi/ticker":52,"@pixi/utils":53}],84:[function(require,module,exports){
 (function (setImmediate){(function (){
 'use strict';
 
@@ -47399,7 +47493,7 @@ Promise._unhandledRejectionFn = function _unhandledRejectionFn(err) {
 module.exports = Promise;
 
 }).call(this)}).call(this,require("timers").setImmediate)
-},{"timers":9}],79:[function(require,module,exports){
+},{"timers":9}],85:[function(require,module,exports){
 "use strict";
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
@@ -47470,7 +47564,7 @@ Object.defineProperty(exports, "protocol", { enumerable: true, get: function () 
 
 module.exports = lookup;
 
-},{"./manager.js":80,"./socket.js":82,"./url.js":83,"debug":51,"socket.io-parser":85}],80:[function(require,module,exports){
+},{"./manager.js":86,"./socket.js":88,"./url.js":89,"debug":57,"socket.io-parser":91}],86:[function(require,module,exports){
 "use strict";
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
@@ -47867,7 +47961,7 @@ class Manager extends component_emitter_1.Emitter {
 }
 exports.Manager = Manager;
 
-},{"./on.js":81,"./socket.js":82,"@socket.io/component-emitter":49,"backo2":50,"debug":51,"engine.io-client":55,"socket.io-parser":85}],81:[function(require,module,exports){
+},{"./on.js":87,"./socket.js":88,"@socket.io/component-emitter":55,"backo2":56,"debug":57,"engine.io-client":61,"socket.io-parser":91}],87:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.on = void 0;
@@ -47879,7 +47973,7 @@ function on(obj, ev, fn) {
 }
 exports.on = on;
 
-},{}],82:[function(require,module,exports){
+},{}],88:[function(require,module,exports){
 "use strict";
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
@@ -48389,7 +48483,7 @@ class Socket extends component_emitter_1.Emitter {
 }
 exports.Socket = Socket;
 
-},{"./on.js":81,"@socket.io/component-emitter":49,"debug":51,"socket.io-parser":85}],83:[function(require,module,exports){
+},{"./on.js":87,"@socket.io/component-emitter":55,"debug":57,"socket.io-parser":91}],89:[function(require,module,exports){
 "use strict";
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
@@ -48461,7 +48555,7 @@ function url(uri, path = "", loc) {
 }
 exports.url = url;
 
-},{"debug":51,"parseuri":76}],84:[function(require,module,exports){
+},{"debug":57,"parseuri":82}],90:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.reconstructPacket = exports.deconstructPacket = void 0;
@@ -48543,7 +48637,7 @@ function _reconstructPacket(data, buffers) {
     return data;
 }
 
-},{"./is-binary.js":86}],85:[function(require,module,exports){
+},{"./is-binary.js":92}],91:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.Decoder = exports.Encoder = exports.PacketType = exports.protocol = void 0;
@@ -48826,7 +48920,7 @@ class BinaryReconstructor {
     }
 }
 
-},{"./binary.js":84,"./is-binary.js":86,"@socket.io/component-emitter":49,"debug":51}],86:[function(require,module,exports){
+},{"./binary.js":90,"./is-binary.js":92,"@socket.io/component-emitter":55,"debug":57}],92:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.hasBinary = exports.isBinary = void 0;
@@ -48883,7 +48977,7 @@ function hasBinary(obj, toJSON) {
 }
 exports.hasBinary = hasBinary;
 
-},{}],87:[function(require,module,exports){
+},{}],93:[function(require,module,exports){
 'use strict';
 
 var alphabet = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-_'.split('')
@@ -48953,4 +49047,4 @@ yeast.encode = encode;
 yeast.decode = decode;
 module.exports = yeast;
 
-},{}]},{},[12]);
+},{}]},{},[15]);
