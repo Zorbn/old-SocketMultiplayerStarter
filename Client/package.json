@@ -1,0 +1,9 @@
+{
+  "scripts": {
+    "start": "tsc && browserify ./build/index.js > ./build/bundle.js"
+  },
+  "dependencies": {
+    "pixi.js": "^6.2.1",
+    "socket.io-client": "^4.4.1"
+  }
+}
