@@ -5,31 +5,36 @@ import path from "path";
 import { Socket } from "socket.io";
 const io = require("socket.io")(server);
 
-// TODO: Limit tick rate
-// TODO: Interpolate movement (client-side)
+// TODO: Share types??
+// TODO: Use classes (ie: vector class, entity class (reusable smooth movement), etc)
 
 app.use(
     express.static(path.join(__dirname, "../../Client/build"))
 );
 
-type Player = {
+type Vector = {
     x: number,
-    y: number,
+    y: number
+}
+
+type PlayerList = { [id: string]: Player };
+
+type Player = {
+    pos: Vector
     moveSpeed: number
 }
 
 type PlayerMovementEvent = {
     id: string,
-    x: number,
-    y: number
+    pos: Vector
 }
 
-let players: { [id: string]: Player } = {};
+let playerList: PlayerList = {};
 let playerCount = 0;
 
 io.on("connection", (socket: Socket) => {
     console.log("A client connected");
-    addPlayer(socket, Math.random() * 300, Math.random() * 300);
+    addPlayer(socket, { x: Math.random() * 300, y: Math.random() * 300 });
 
     socket.on("disconnect", () => {
         console.log("A client disconnected");
@@ -39,14 +44,7 @@ io.on("connection", (socket: Socket) => {
     socket.on("playerMoved", (event: PlayerMovementEvent) => {        
         if (!event) return;
 
-        players[event.id].x = event.x;
-        players[event.id].y = event.y;
-
-        socket.broadcast.emit("playerMoved", {
-            id: event.id,
-            x: event.x,
-            y: event.y
-        });
+        playerList[event.id].pos = event.pos;
     });
 });
 
@@ -56,31 +54,43 @@ server.listen(port, () => {
     console.log("Listening on: ", port);
 });
 
-function addPlayer(socket: Socket, x: number, y: number) {
-    players[socket.id] = {
-        x,
-        y,
+function addPlayer(socket: Socket, pos: Vector) {
+    playerList[socket.id] = {
+        pos,
         moveSpeed: 4,
     };
 
     socket.emit("initPlayer", {
         id: socket.id,
-        playerList: players
+        playerList: playerList
     });
 
     socket.broadcast.emit("addPlayer", {
         id: socket.id,
-        x,
-        y
+        pos
     });
 
     playerCount++;
 }
 
 function removePlayer(socket: Socket) {
-    delete players[socket.id];
+    delete playerList[socket.id];
     playerCount--;
     socket.broadcast.emit("removePlayer", {
         id: socket.id
     });
 }
+
+const TickRate = 30;
+const TickMs = 1000 / TickRate;
+
+function tick() {
+    for (let [id, player] of Object.entries(playerList)) {
+        io.sockets.sockets.get(id).broadcast.emit("playerMoved", {
+            id,
+            pos: player.pos
+        });
+    }
+}
+
+setInterval(tick, TickMs);

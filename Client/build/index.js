@@ -32,25 +32,26 @@ let app = new pixi.Application({
 });
 document.body.appendChild(app.view);
 let players = {};
+let smoothPlayerPositions = {};
+const smoothSteps = 3;
 let localId = "";
 let initialized = false;
 function addPlayer(event) {
     if (!event)
         return;
     players[event.id] = {
-        x: event.x,
-        y: event.y,
+        pos: event.pos,
         moveSpeed: event.moveSpeed,
         sprite: pixi.Sprite.from("./assets/player.png")
     };
+    smoothPlayerPositions[event.id] = event.pos;
     app.stage.addChild(players[event.id].sprite);
 }
 socket.on("playerMoved", (event) => {
     if (!event)
         return;
     if (players[event.id] != null) {
-        players[event.id].x = event.x;
-        players[event.id].y = event.y;
+        players[event.id].pos = event.pos;
     }
 });
 socket.on("initPlayer", (event) => {
@@ -62,8 +63,7 @@ socket.on("initPlayer", (event) => {
     for (let [id, player] of Object.entries(players)) {
         addPlayer({
             id,
-            x: player.x,
-            y: player.y,
+            pos: player.pos,
             moveSpeed: player.moveSpeed
         });
     }
@@ -79,6 +79,7 @@ socket.on("removePlayer", (event) => {
         return;
     app.stage.removeChild(players[event.id].sprite);
     delete players[event.id];
+    delete smoothPlayerPositions[event.id];
 });
 let pressedKeys = [];
 document.addEventListener("keydown", (event) => {
@@ -100,13 +101,28 @@ window.addEventListener("resize", () => {
 app.ticker.add((delta) => {
     update(delta);
 });
+function lerp(start, end, steps, delta) {
+    return (start + (end - start) / (steps / delta));
+}
+function vectorLerp(start, end, steps, delta) {
+    return {
+        x: lerp(start.x, end.x, steps, delta),
+        y: lerp(start.y, end.y, steps, delta)
+    };
+}
 function update(delta) {
     if (!initialized)
         return;
     updateLocalPlayer(delta);
     for (let [id, player] of Object.entries(players)) {
-        player.sprite.x = player.x;
-        player.sprite.y = player.y;
+        if (id != localId) {
+            smoothPlayerPositions[id] = vectorLerp(smoothPlayerPositions[id], player.pos, smoothSteps, delta);
+        }
+        else {
+            smoothPlayerPositions[id] = player.pos;
+        }
+        player.sprite.x = smoothPlayerPositions[id].x;
+        player.sprite.y = smoothPlayerPositions[id].y;
     }
 }
 ;
@@ -134,11 +150,10 @@ function updateLocalPlayer(delta) {
         moveInputY /= moveInputMagnitude;
     }
     let deltaSpeed = localPlayer.moveSpeed * delta;
-    localPlayer.x += moveInputX * deltaSpeed;
-    localPlayer.y += moveInputY * deltaSpeed;
+    localPlayer.pos.x += moveInputX * deltaSpeed;
+    localPlayer.pos.y += moveInputY * deltaSpeed;
     socket.emit("playerMoved", {
         id: localId,
-        x: localPlayer.x,
-        y: localPlayer.y
+        pos: localPlayer.pos
     });
 }

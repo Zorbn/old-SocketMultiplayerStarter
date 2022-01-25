@@ -8,14 +8,14 @@ const app = (0, express_1.default)();
 const server = require("http").createServer(app);
 const path_1 = __importDefault(require("path"));
 const io = require("socket.io")(server);
-// TODO: Limit tick rate
-// TODO: Handle disconnections
+// TODO: Share types
+// TODO: Use classes (ie: vector class, entity class (reusable smooth movement), etc)
 app.use(express_1.default.static(path_1.default.join(__dirname, "../../Client/build")));
 let players = {};
 let playerCount = 0;
 io.on("connection", (socket) => {
     console.log("A client connected");
-    addPlayer(socket, Math.random() * 300, Math.random() * 300);
+    addPlayer(socket, { x: Math.random() * 300, y: Math.random() * 300 });
     socket.on("disconnect", () => {
         console.log("A client disconnected");
         removePlayer(socket);
@@ -23,23 +23,16 @@ io.on("connection", (socket) => {
     socket.on("playerMoved", (event) => {
         if (!event)
             return;
-        players[event.id].x = event.x;
-        players[event.id].y = event.y;
-        socket.broadcast.emit("playerMoved", {
-            id: event.id,
-            x: event.x,
-            y: event.y
-        });
+        players[event.id].pos = event.pos;
     });
 });
 const port = process.env.PORT || 3000;
 server.listen(port, () => {
     console.log("Listening on: ", port);
 });
-function addPlayer(socket, x, y) {
+function addPlayer(socket, pos) {
     players[socket.id] = {
-        x,
-        y,
+        pos,
         moveSpeed: 4,
     };
     socket.emit("initPlayer", {
@@ -48,8 +41,7 @@ function addPlayer(socket, x, y) {
     });
     socket.broadcast.emit("addPlayer", {
         id: socket.id,
-        x,
-        y
+        pos
     });
     playerCount++;
 }
@@ -60,3 +52,14 @@ function removePlayer(socket) {
         id: socket.id
     });
 }
+const TickRate = 30;
+const TickMs = 1000 / TickRate;
+function tick() {
+    for (let [id, player] of Object.entries(players)) {
+        io.sockets.sockets.get(id).broadcast.emit("playerMoved", {
+            id,
+            pos: player.pos
+        });
+    }
+}
+setInterval(tick, TickMs);

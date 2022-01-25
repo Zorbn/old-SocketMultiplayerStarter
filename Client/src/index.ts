@@ -9,19 +9,22 @@ let app = new pixi.Application({
 });
 document.body.appendChild(app.view);
 
+type Vector = {
+    x: number,
+    y: number
+}
+
 type PlayerList = { [id: string]: Player };
 
 type Player = {
-    x: number,
-    y: number,
+    pos: Vector,
     moveSpeed: number,
     sprite: pixi.Sprite
 }
 
 type PlayerMovementEvent = {
     id: string,
-    x: number,
-    y: number
+    pos: Vector,
 }
 
 type InitPlayerEvent = {
@@ -31,8 +34,7 @@ type InitPlayerEvent = {
 
 type AddPlayerEvent = {
     id: string,
-    x: number,
-    y: number,
+    pos: Vector,
     moveSpeed: number
 }
 
@@ -40,29 +42,31 @@ type RemovePlayerEvent = {
     id: string
 }
 
-let players: PlayerList = {};
+let playerList: PlayerList = {};
+let smoothPosList: { [id: string]: Vector } = {};
+const smoothSteps = 3;
 let localId = "";
 let initialized = false;
 
 function addPlayer(event: AddPlayerEvent) {
     if (!event) return;
     
-    players[event.id] = {
-        x: event.x,
-        y: event.y,
+    playerList[event.id] = {
+        pos: event.pos,
         moveSpeed: event.moveSpeed,
         sprite: pixi.Sprite.from("./assets/player.png")
     };
 
-    app.stage.addChild(players[event.id].sprite);
+    smoothPosList[event.id] = event.pos;
+
+    app.stage.addChild(playerList[event.id].sprite);
 }
 
 socket.on("playerMoved", (event: PlayerMovementEvent) => {
     if (!event) return;
 
-    if (players[event.id] != null) {
-        players[event.id].x = event.x;
-        players[event.id].y = event.y;
+    if (playerList[event.id] != null) {
+        playerList[event.id].pos = event.pos;
     }
 });
 
@@ -70,14 +74,13 @@ socket.on("initPlayer", (event: InitPlayerEvent) => {
     if (!event) return;
 
     localId = event.id;
-    players = event.playerList;
+    playerList = event.playerList;
     initialized = true;
 
-    for (let [id, player] of Object.entries(players)) {
+    for (let [id, player] of Object.entries(playerList)) {
         addPlayer({
             id,
-            x: player.x,
-            y: player.y,
+            pos: player.pos,
             moveSpeed: player.moveSpeed
         });
     }
@@ -94,8 +97,9 @@ socket.on("addPlayer", (event: AddPlayerEvent) => {
 socket.on("removePlayer", (event: RemovePlayerEvent) => {
     if (!event) return;
     
-    app.stage.removeChild(players[event.id].sprite);
-    delete players[event.id];
+    app.stage.removeChild(playerList[event.id].sprite);
+    delete playerList[event.id];
+    delete smoothPosList[event.id];
 });
 
 let pressedKeys: string[] = [];
@@ -121,19 +125,36 @@ app.ticker.add((delta) => {
     update(delta)
 });
 
+function lerp(start: number, end: number, steps: number, delta: number): number {
+    return (start + (end - start) / (steps / delta));
+}
+
+function vectorLerp(start: Vector, end: Vector, steps: number, delta: number): Vector {
+    return {
+        x: lerp(start.x, end.x, steps, delta),
+        y: lerp(start.y, end.y, steps, delta)
+    }
+}
+
 function update(delta: number) {
     if (!initialized) return;
 
     updateLocalPlayer(delta);
 
-    for (let [id, player] of Object.entries(players)) {
-        player.sprite.x = player.x;
-        player.sprite.y = player.y;
+    for (let [id, player] of Object.entries(playerList)) {        
+        if (id != localId) {
+            smoothPosList[id] = vectorLerp(smoothPosList[id], player.pos, smoothSteps, delta);
+        } else {
+            smoothPosList[id] = player.pos;
+        }
+
+        player.sprite.x = smoothPosList[id].x;
+        player.sprite.y = smoothPosList[id].y;
     }
 };
 
 function updateLocalPlayer(delta: number) {    
-    let localPlayer = players[localId];
+    let localPlayer = playerList[localId];
 
     if (!localPlayer) return;
 
@@ -164,12 +185,11 @@ function updateLocalPlayer(delta: number) {
     }
 
     let deltaSpeed = localPlayer.moveSpeed * delta;
-    localPlayer.x += moveInputX * deltaSpeed;
-    localPlayer.y += moveInputY * deltaSpeed;
+    localPlayer.pos.x += moveInputX * deltaSpeed;
+    localPlayer.pos.y += moveInputY * deltaSpeed;
 
     socket.emit("playerMoved", {
         id: localId,
-        x: localPlayer.x,
-        y: localPlayer.y
+        pos: localPlayer.pos
     });
 }
