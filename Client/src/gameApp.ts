@@ -4,7 +4,7 @@ import { EntityData } from "./entity";
 import { Player } from "./player";
 
 type InitEvent = {
-    playerList: { [id: string]: EntityData }
+    playerDataList: { [id: string]: EntityData }
 }
 
 export class GameApp extends Pixi.Application {
@@ -38,7 +38,7 @@ export class GameApp extends Pixi.Application {
         socket.on("init", (event: InitEvent) => {
             if (!event) return;
         
-            for (let [id, player] of Object.entries(event.playerList)) {
+            for (let [id, player] of Object.entries(event.playerDataList)) {
                 new Player(player.pos, player.moveSpeed, this.stage, id);
             }
         

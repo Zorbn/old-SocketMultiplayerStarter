@@ -4,8 +4,6 @@ import { Entity, EntityData } from "./entity";
 import { Input } from "./input";
 import { Vector } from "./vector";
 
-// TODO: Evaluate if removing individual player Id's works better
-
 export type PlayerList = { [id: string]: Player };
 
 type PlayerData = {

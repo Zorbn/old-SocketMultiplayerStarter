@@ -3815,8 +3815,12 @@ exports.GameApp = void 0;
 const Pixi = __importStar(require("pixi.js"));
 const player_1 = require("./player");
 class GameApp extends Pixi.Application {
-    constructor(width, height, backgroundColor, socket) {
-        super({ width, height, backgroundColor });
+    constructor(backgroundColor, socket) {
+        super({
+            width: window.innerWidth,
+            height: window.innerHeight,
+            backgroundColor
+        });
         this.initialized = false;
         document.body.appendChild(this.view);
         this.ticker.add((delta) => {
@@ -3837,7 +3841,7 @@ class GameApp extends Pixi.Application {
         socket.on("init", (event) => {
             if (!event)
                 return;
-            for (let [id, player] of Object.entries(event.playerList)) {
+            for (let [id, player] of Object.entries(event.playerDataList)) {
                 new player_1.Player(player.pos, player.moveSpeed, this.stage, id);
             }
             this.initialized = true;
@@ -3868,7 +3872,7 @@ const player_1 = require("./player");
 const input_1 = require("./input");
 const gameApp_1 = require("./gameApp");
 const socket = (0, socket_io_client_1.default)();
-let gameApp = new gameApp_1.GameApp(window.innerWidth, window.innerHeight, 0x00a1db, socket);
+let gameApp = new gameApp_1.GameApp(0x00a1db, socket);
 gameApp.registerListeners(socket);
 input_1.Input.registerListeners();
 player_1.Player.registerListeners(socket, gameApp.stage);

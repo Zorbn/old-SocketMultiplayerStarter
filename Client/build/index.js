@@ -8,7 +8,7 @@ const player_1 = require("./player");
 const input_1 = require("./input");
 const gameApp_1 = require("./gameApp");
 const socket = (0, socket_io_client_1.default)();
-let gameApp = new gameApp_1.GameApp(window.innerWidth, window.innerHeight, 0x00a1db, socket);
+let gameApp = new gameApp_1.GameApp(0x00a1db, socket);
 gameApp.registerListeners(socket);
 input_1.Input.registerListeners();
 player_1.Player.registerListeners(socket, gameApp.stage);
