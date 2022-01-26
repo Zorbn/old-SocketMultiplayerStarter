@@ -1,6 +1,6 @@
 {
   "scripts": {
-    "start": "tsc && browserify ./build/index.js > ./build/bundle.js"
+    "start": "tsc && browserify ./public/build/index.js > ./public/build/bundle.js"
   },
   "dependencies": {
     "pixi.js": "^6.2.1",

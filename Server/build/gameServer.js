@@ -13,7 +13,7 @@ class GameServer {
         this.app = (0, express_1.default)();
         this.server = require("http").createServer(this.app);
         this.io = require("socket.io")(this.server);
-        this.app.use(express_1.default.static(path_1.default.join(__dirname, "../../Client/build")));
+        this.app.use(express_1.default.static(path_1.default.join(__dirname, "../../Client/public")));
         this.server.listen(port, () => {
             console.log("Listening on: ", port);
         });

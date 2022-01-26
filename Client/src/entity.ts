@@ -19,7 +19,7 @@ export class Entity {
         this.pos = pos;
         this.smoothPos = pos;
         this.moveSpeed = moveSpeed;
-        this.sprite = Pixi.Sprite.from("./assets/player.png");
+        this.sprite = Pixi.Sprite.from("../assets/entity.png");
         Entity.entityList.push(this);
         
         stage.addChild(this.sprite);

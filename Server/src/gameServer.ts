@@ -18,7 +18,7 @@ export class GameServer {
         this.io = require("socket.io")(this.server);
 
         this.app.use(
-            express.static(path.join(__dirname, "../../Client/build"))
+            express.static(path.join(__dirname, "../../Client/public"))
         );
 
         this.server.listen(port, () => {
